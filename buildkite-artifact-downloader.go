@@ -113,6 +113,11 @@ func getArtifactInfo(jobID string) ([]BuildkiteBuildArtifactInfo, error) {
 }
 
 func downloadArtifact(url string, destPath string) {
+	if _, err := os.Stat(destPath); err == nil {
+		log.Println("Destination does already exist - do not download")
+		return
+	}
+
 	// Create the file
 	out, err := os.Create(destPath)
 	if err != nil {
