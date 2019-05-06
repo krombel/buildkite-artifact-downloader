@@ -27,6 +27,7 @@ var (
 	buildkitePipeline *string = flag.String("pipeline", "riot-android", "BuildKite Pipeline")
 	buildID           *int    = flag.Int("buildId", 0, "build ID which should be fetched")
 	destPath          *string = flag.String("dest", destPathDefault, "Destination directory of artifact")
+	artifactFilter    *string = flag.String("artifactFilter", "", "only download file which matches this regexp")
 )
 
 type BuildkiteBuildJobInfo struct {
@@ -149,6 +150,15 @@ func main() {
 		return
 	}
 
+	var reArtifactFilter *regexp.Regexp
+	if *artifactFilter != "" {
+		log.Println("Compile artifact filter")
+		reArtifactFilter, err = regexp.Compile(*artifactFilter)
+		if err != nil {
+			return fmt.Errorf("Cannot parse artifactFilter")
+		}
+	}
+
 	if *destPath == destPathDefault {
 		*destPath = "./" + strconv.Itoa(*buildID) + "-"
 	}
@@ -180,6 +190,10 @@ func main() {
 	}
 
 	for _, artifact := range artifactInfo {
+		if reArtifactFilter != nil && !reArtifactFilter.MatchString(artifact.Filename) {
+			log.Println("Skip", artifact.Filename, "because it does not match artifact filter")
+			continue
+		}
 		log.Println("Start download of", artifact.Filename)
 		downloadArtifact("https://buildkite.com"+artifact.URL, *destPath+artifact.Filename)
 		log.Println(artifact.Filename, "downloaded")
