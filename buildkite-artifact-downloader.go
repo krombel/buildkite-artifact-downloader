@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	destPathDefault string = "./<buildID>-"
+	destPathDefault string = "./<buildID>-<commitID>-<artifactFilename>"
 )
 
 var (
@@ -38,8 +38,9 @@ type BuildkiteBuildJobInfo struct {
 	State         string `json:"state"`
 }
 type BuildkiteBuildInfo struct {
-	State string `json:"state"`
-	Jobs  []BuildkiteBuildJobInfo
+	State    string `json:"state"`
+	CommitID string `json:"commit_id"`
+	Jobs     []BuildkiteBuildJobInfo
 }
 
 type BuildkiteBuildArtifactInfo struct {
@@ -164,14 +165,17 @@ func buildkiteHandler() error {
 		}
 	}
 
-	if *destPath == destPathDefault {
-		*destPath = "./" + strconv.Itoa(*buildID) + "-"
-	}
+	var re *regexp.Regexp
+	re = regexp.MustCompile(`<buildID>`)
+	*destPath = re.ReplaceAllLiteralString(*destPath, strconv.Itoa(*buildID))
 
 	buildInfo, err := getBuildInfo()
 	if err != nil {
 		return err
 	}
+
+	re = regexp.MustCompile(`<commitID>`)
+	*destPath = re.ReplaceAllLiteralString(*destPath, buildInfo.CommitID[:8])
 
 	var foundJob *BuildkiteBuildJobInfo
 	for _, job := range buildInfo.Jobs {
@@ -197,7 +201,9 @@ func buildkiteHandler() error {
 			continue
 		}
 		log.Println("Start download of", artifact.Filename)
-		err := downloadArtifact("https://buildkite.com"+artifact.URL, *destPath+artifact.Filename)
+		re = regexp.MustCompile(`<artifactFilename>`)
+		*destPath = re.ReplaceAllLiteralString(*destPath, artifact.Filename)
+		err := downloadArtifact("https://buildkite.com"+artifact.URL, *destPath)
 		if err != nil {
 			log.Println("Error:", err)
 		}
