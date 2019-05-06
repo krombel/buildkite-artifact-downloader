@@ -23,11 +23,12 @@ var (
 	netClient = &http.Client{
 		Timeout: time.Second * 10,
 	}
-	buildkiteOrg      *string = flag.String("org", "matrix-dot-org", "BuildKite Organisation")
-	buildkitePipeline *string = flag.String("pipeline", "riot-android", "BuildKite Pipeline")
-	buildID           *int    = flag.Int("buildId", 0, "build ID which should be fetched")
-	destPath          *string = flag.String("dest", destPathDefault, "Destination directory of artifact")
-	artifactFilter    *string = flag.String("artifactFilter", "", "only download file which matches this regexp")
+	buildkiteOrg        *string = flag.String("org", "matrix-dot-org", "BuildKite Organisation")
+	buildkitePipeline   *string = flag.String("pipeline", "riot-android", "BuildKite Pipeline")
+	buildID             *int    = flag.Int("buildId", 0, "build ID which should be fetched")
+	destPath            *string = flag.String("dest", destPathDefault, "Destination directory of artifact")
+	artifactFilter      *string = flag.String("artifactFilter", "", "only download file which matches this regexp")
+	artifactsDownloaded         = false
 )
 
 type BuildkiteBuildJobInfo struct {
@@ -89,7 +90,7 @@ func getLatestBuildID() (int, error) {
 
 func getBuildInfo() (*BuildkiteBuildInfo, error) {
 	url := "https://buildkite.com/" + *buildkiteOrg + "/" + *buildkitePipeline + "/builds/" + strconv.Itoa(*buildID) + ".json?initial=true"
-	log.Println("Download", buildID, ":", url)
+	log.Println("Download", *buildID, ":", url)
 	bodyBytes, err := getData(url)
 	if err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ func getBuildInfo() (*BuildkiteBuildInfo, error) {
 
 func getArtifactInfo(jobID string) ([]BuildkiteBuildArtifactInfo, error) {
 	url := "https://buildkite.com/organizations/" + *buildkiteOrg + "/pipelines/" + *buildkitePipeline + "/builds/" + strconv.Itoa(*buildID) + "/jobs/" + jobID + "/artifacts"
-	log.Println("Download", buildID, ",", jobID, ":", url)
+	log.Println("Download", *buildID, ",", jobID, ":", url)
 	bodyBytes, err := getData(url)
 	if err != nil {
 		return nil, err
@@ -137,14 +138,17 @@ func downloadArtifact(url string, destPath string) error {
 	if err != nil {
 		return fmt.Errorf("Cannot write to %s ('%s')", destPath, err)
 	}
+
+	artifactsDownloaded = true
+	return nil
 }
 
-func main() {
-	flag.Parse()
-
+func buildkiteHandler() error {
 	var err error
 	if *buildID == 0 {
+		log.Println("BuildId unset. Try resolving", *buildID)
 		*buildID, err = getLatestBuildID()
+		// ignore error as it is just meant to be a fallback
 	}
 
 	if *buildID == 0 {
@@ -198,5 +202,22 @@ func main() {
 			log.Println("Error:", err)
 		}
 		log.Println(artifact.Filename, "downloaded")
+	}
+	return nil
+}
+
+func main() {
+	flag.Parse()
+
+	err := buildkiteHandler()
+	if err != nil {
+		log.Println("Error:", err)
+	}
+
+	// use exit code to respond if there are artifacts downloaded
+	if artifactsDownloaded {
+		os.Exit(0)
+	} else {
+		os.Exit(1)
 	}
 }
