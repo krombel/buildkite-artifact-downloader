@@ -52,6 +52,7 @@ func getData(url string) (bodyBytes []byte, err error) {
 	buildResponse, err := netClient.Get(url)
 	if err != nil {
 		log.Fatal("GET failed", err)
+		return nil, err
 	}
 	defer buildResponse.Body.Close()
 
@@ -112,33 +113,29 @@ func getArtifactInfo(jobID string) ([]BuildkiteBuildArtifactInfo, error) {
 	return parsedResponse, nil
 }
 
-func downloadArtifact(url string, destPath string) {
+func downloadArtifact(url string, destPath string) error {
 	if _, err := os.Stat(destPath); err == nil {
-		log.Println("Destination does already exist - do not download")
-		return
+		return fmt.Errorf("Destination does already exist - do not download")
 	}
 
 	// Create the file
 	out, err := os.Create(destPath)
 	if err != nil {
-		log.Printf("Cannot create %s ('%s')\n", destPath, err)
-		return
+		return fmt.Errorf("Cannot create %s ('%s')", destPath, err)
 	}
 	defer out.Close()
 
 	// Get the data
 	resp, err := netClient.Get(url)
 	if err != nil {
-		log.Printf("Cannot download to %s ('%s')\n", destPath, err)
-		return
+		return fmt.Errorf("Cannot download to %s ('%s')", destPath, err)
 	}
 	defer resp.Body.Close()
 
 	// Write the body to file
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		log.Printf("Cannot write to %s ('%s')\n", destPath, err)
-		return
+		return fmt.Errorf("Cannot write to %s ('%s')", destPath, err)
 	}
 }
 
@@ -151,8 +148,7 @@ func main() {
 	}
 
 	if *buildID == 0 {
-		log.Fatal("BuildID unset and cannot be resolved")
-		return
+		return fmt.Errorf("BuildID unset and cannot be resolved")
 	}
 
 	var reArtifactFilter *regexp.Regexp
@@ -170,8 +166,7 @@ func main() {
 
 	buildInfo, err := getBuildInfo()
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	var foundJob *BuildkiteBuildJobInfo
@@ -183,15 +178,13 @@ func main() {
 		break
 	}
 	if foundJob == nil {
-		log.Printf("Cannot find job with artifacts\n")
-		return
+		return fmt.Errorf("Cannot find job with artifacts\n")
 	}
 
 	var artifactInfo []BuildkiteBuildArtifactInfo
 	artifactInfo, err = getArtifactInfo(foundJob.ID)
 	if err != nil {
-		log.Printf("%v\n", err)
-		return
+		return err
 	}
 
 	for _, artifact := range artifactInfo {
@@ -200,7 +193,10 @@ func main() {
 			continue
 		}
 		log.Println("Start download of", artifact.Filename)
-		downloadArtifact("https://buildkite.com"+artifact.URL, *destPath+artifact.Filename)
+		err := downloadArtifact("https://buildkite.com"+artifact.URL, *destPath+artifact.Filename)
+		if err != nil {
+			log.Println("Error:", err)
+		}
 		log.Println(artifact.Filename, "downloaded")
 	}
 }
