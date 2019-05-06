@@ -174,6 +174,10 @@ func buildkiteHandler() error {
 		return err
 	}
 
+	if buildInfo.State == "failed" {
+		return fmt.Errorf("Build %d failed; Abort", *buildID)
+	}
+
 	re = regexp.MustCompile(`<commitID>`)
 	*destPath = re.ReplaceAllLiteralString(*destPath, buildInfo.CommitID[:8])
 
