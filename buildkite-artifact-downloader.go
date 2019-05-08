@@ -115,7 +115,7 @@ func getArtifactInfo(jobID string) ([]BuildkiteBuildArtifactInfo, error) {
 	return parsedResponse, nil
 }
 
-func downloadArtifact(url string, destPath string) error {
+func downloadArtifact(artifact BuildkiteBuildArtifactInfo, destPath string) error {
 	if _, err := os.Stat(destPath); err == nil {
 		return fmt.Errorf("Destination does already exist - do not download")
 	}
@@ -128,7 +128,7 @@ func downloadArtifact(url string, destPath string) error {
 	defer out.Close()
 
 	// Get the data
-	resp, err := netClient.Get(url)
+	resp, err := netClient.Get("https://buildkite.com" + artifact.URL)
 	if err != nil {
 		return fmt.Errorf("Cannot download to %s ('%s')", destPath, err)
 	}
@@ -142,6 +142,21 @@ func downloadArtifact(url string, destPath string) error {
 
 	artifactsDownloaded = true
 	return nil
+}
+
+func replaceStringByData(input string, buildInfo BuildkiteBuildInfo, artifact BuildkiteBuildArtifactInfo) string {
+	var output string
+	var re *regexp.Regexp
+	re = regexp.MustCompile(`<buildID>`)
+	output = re.ReplaceAllLiteralString(input, strconv.Itoa(*buildID))
+
+	re = regexp.MustCompile(`<commitID>`)
+	output = re.ReplaceAllLiteralString(output, buildInfo.CommitID[:8])
+
+	re = regexp.MustCompile(`<artifactFilename>`)
+	output = re.ReplaceAllLiteralString(output, artifact.Filename)
+
+	return output
 }
 
 func buildkiteHandler() error {
@@ -165,10 +180,6 @@ func buildkiteHandler() error {
 		}
 	}
 
-	var re *regexp.Regexp
-	re = regexp.MustCompile(`<buildID>`)
-	*destPath = re.ReplaceAllLiteralString(*destPath, strconv.Itoa(*buildID))
-
 	buildInfo, err := getBuildInfo()
 	if err != nil {
 		return err
@@ -177,9 +188,6 @@ func buildkiteHandler() error {
 	if buildInfo.State == "failed" {
 		return fmt.Errorf("Build %d failed; Abort", *buildID)
 	}
-
-	re = regexp.MustCompile(`<commitID>`)
-	*destPath = re.ReplaceAllLiteralString(*destPath, buildInfo.CommitID[:8])
 
 	var foundJob *BuildkiteBuildJobInfo
 	for _, job := range buildInfo.Jobs {
@@ -204,10 +212,8 @@ func buildkiteHandler() error {
 			log.Println("Skip", artifact.Filename, "because it does not match artifact filter")
 			continue
 		}
-		log.Println("Start download of", artifact.Filename)
-		re = regexp.MustCompile(`<artifactFilename>`)
-		*destPath = re.ReplaceAllLiteralString(*destPath, artifact.Filename)
-		err := downloadArtifact("https://buildkite.com"+artifact.URL, *destPath)
+		outPath := replaceStringByData(*destPath, *buildInfo, artifact)
+		err := downloadArtifact(artifact, outPath)
 		if err != nil {
 			log.Println("Error:", err)
 		}
