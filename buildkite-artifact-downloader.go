@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"log"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -23,12 +23,13 @@ var (
 	netClient = &http.Client{
 		Timeout: time.Second * 10,
 	}
+	artifactFilter      *string = flag.String("artifactFilter", "", "only download file which matches this regexp")
+	artifactsDownloaded         = false
 	buildkiteOrg        *string = flag.String("org", "matrix-dot-org", "BuildKite Organisation")
 	buildkitePipeline   *string = flag.String("pipeline", "riot-android", "BuildKite Pipeline")
 	buildID             *int    = flag.Int("buildId", 0, "build ID which should be fetched")
 	destPath            *string = flag.String("dest", destPathDefault, "Destination directory of artifact")
-	artifactFilter      *string = flag.String("artifactFilter", "", "only download file which matches this regexp")
-	artifactsDownloaded         = false
+	logLevel            *string = flag.String("log", "WARN", "One of DEBUG,INFO,WARN,ERROR")
 )
 
 type BuildkiteBuildJobInfo struct {
@@ -91,12 +92,18 @@ func getLatestBuildID() (int, error) {
 
 func getBuildInfo() (*BuildkiteBuildInfo, error) {
 	url := "https://buildkite.com/" + *buildkiteOrg + "/" + *buildkitePipeline + "/builds/" + strconv.Itoa(*buildID) + ".json?initial=true"
-	log.Println("Download", *buildID, ":", url)
+	log.WithFields(log.Fields{
+		"buildID": *buildID,
+		"url":     url,
+	}).Debug("Start buildInfo download")
 	bodyBytes, err := getData(url)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Download succeeded")
+	log.WithFields(log.Fields{
+		"buildID": *buildID,
+		"url":     url,
+	}).Debug("Download succeeded")
 	parsedBuildResponse := BuildkiteBuildInfo{}
 	json.Unmarshal(bodyBytes, &parsedBuildResponse)
 	return &parsedBuildResponse, nil
@@ -104,12 +111,20 @@ func getBuildInfo() (*BuildkiteBuildInfo, error) {
 
 func getArtifactInfo(jobID string) ([]BuildkiteBuildArtifactInfo, error) {
 	url := "https://buildkite.com/organizations/" + *buildkiteOrg + "/pipelines/" + *buildkitePipeline + "/builds/" + strconv.Itoa(*buildID) + "/jobs/" + jobID + "/artifacts"
-	log.Println("Download", *buildID, ",", jobID, ":", url)
+	log.WithFields(log.Fields{
+		"buildID": *buildID,
+		"jobID":   jobID,
+		"url":     url,
+	}).Info("Start artifactInfo download")
 	bodyBytes, err := getData(url)
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Download succeeded")
+	log.WithFields(log.Fields{
+		"buildID": *buildID,
+		"jobID":   jobID,
+		"url":     url,
+	}).Info("Download succeeded")
 	parsedResponse := []BuildkiteBuildArtifactInfo{}
 	json.Unmarshal(bodyBytes, &parsedResponse)
 	return parsedResponse, nil
@@ -127,6 +142,12 @@ func downloadArtifact(artifact BuildkiteBuildArtifactInfo, destPath string) erro
 	}
 	defer out.Close()
 
+	log.WithFields(log.Fields{
+		"buildID":          *buildID,
+		"artifactFilename": artifact.Filename,
+		"destination":      destPath,
+	}).Info("Start artifact download")
+
 	// Get the data
 	resp, err := netClient.Get("https://buildkite.com" + artifact.URL)
 	if err != nil {
@@ -140,8 +161,29 @@ func downloadArtifact(artifact BuildkiteBuildArtifactInfo, destPath string) erro
 		return fmt.Errorf("Cannot write to %s ('%s')", destPath, err)
 	}
 
+	log.WithFields(log.Fields{
+		"buildID":          *buildID,
+		"artifactFilename": artifact.Filename,
+		"destination":      destPath,
+	}).Info("Download finished")
 	artifactsDownloaded = true
 	return nil
+}
+
+func setLoglevel() {
+	if *logLevel == "DEBUG" {
+		log.SetLevel(log.DebugLevel)
+	} else if *logLevel == "INFO" {
+		log.SetLevel(log.InfoLevel)
+	} else if *logLevel == "WARN" {
+		log.SetLevel(log.WarnLevel)
+	} else if *logLevel == "ERROR" {
+		log.SetLevel(log.ErrorLevel)
+	} else {
+		log.WithFields(log.Fields{
+			"loglevel": *logLevel,
+		}).Fatal("Unsupported loglevel")
+	}
 }
 
 func replaceStringByData(input string, buildInfo BuildkiteBuildInfo, artifact BuildkiteBuildArtifactInfo) string {
@@ -162,7 +204,7 @@ func replaceStringByData(input string, buildInfo BuildkiteBuildInfo, artifact Bu
 func buildkiteHandler() error {
 	var err error
 	if *buildID == 0 {
-		log.Println("BuildId unset. Try resolving", *buildID)
+		log.Debug("BuildId unset. Try resolving")
 		*buildID, err = getLatestBuildID()
 		// ignore error as it is just meant to be a fallback
 	}
@@ -173,10 +215,14 @@ func buildkiteHandler() error {
 
 	var reArtifactFilter *regexp.Regexp
 	if *artifactFilter != "" {
-		log.Println("Compile artifact filter")
+		log.WithFields(log.Fields{
+			"artifactFilter": *artifactFilter,
+		}).Debug("Compile artifact filter")
 		reArtifactFilter, err = regexp.Compile(*artifactFilter)
 		if err != nil {
-			return fmt.Errorf("Cannot parse artifactFilter")
+			log.WithFields(log.Fields{
+				"artifactFilter": *artifactFilter,
+			}).Fatal("Cannot parse artifactFilter")
 		}
 	}
 
@@ -186,7 +232,10 @@ func buildkiteHandler() error {
 	}
 
 	if buildInfo.State == "failed" {
-		return fmt.Errorf("Build %d failed; Abort", *buildID)
+		log.WithFields(log.Fields{
+			"buildID": *buildID,
+		}).Warn("Build failed. Abort")
+		return nil
 	}
 
 	var foundJob *BuildkiteBuildJobInfo
@@ -198,7 +247,10 @@ func buildkiteHandler() error {
 		break
 	}
 	if foundJob == nil {
-		return fmt.Errorf("Cannot find job with artifacts\n")
+		log.WithFields(log.Fields{
+			"buildID": *buildID,
+		}).Warn("Cannot find job with artifacts")
+		return fmt.Errorf("Cannot find job with artifacts")
 	}
 
 	var artifactInfo []BuildkiteBuildArtifactInfo
@@ -209,15 +261,17 @@ func buildkiteHandler() error {
 
 	for _, artifact := range artifactInfo {
 		if reArtifactFilter != nil && !reArtifactFilter.MatchString(artifact.Filename) {
-			log.Println("Skip", artifact.Filename, "because it does not match artifact filter")
+			log.WithFields(log.Fields{
+				"buildID":          *buildID,
+				"artifactFilename": artifact.Filename,
+			}).Info("Skip artifact because it does not match artifact filter")
 			continue
 		}
 		outPath := replaceStringByData(*destPath, *buildInfo, artifact)
 		err := downloadArtifact(artifact, outPath)
 		if err != nil {
-			log.Println("Error:", err)
+			log.Warn(err)
 		}
-		log.Println(artifact.Filename, "downloaded")
 	}
 	return nil
 }
@@ -225,9 +279,11 @@ func buildkiteHandler() error {
 func main() {
 	flag.Parse()
 
+	setLoglevel()
+
 	err := buildkiteHandler()
 	if err != nil {
-		log.Println("Error:", err)
+		log.Warn(err)
 	}
 
 	// use exit code to respond if there are artifacts downloaded
