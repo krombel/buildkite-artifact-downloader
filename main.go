@@ -5,6 +5,7 @@ import (
 	"os"
 
 	downloader "./downloader"
+	fdroidHandler "./fdroid-handler"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,6 +16,9 @@ var (
 	buildkitePipeline   *string = flag.String("pipeline", "riot-android", "BuildKite Pipeline")
 	buildID             *int    = flag.Int("buildId", 0, "build ID which should be fetched")
 	destPath            *string = flag.String("dest", downloader.DefaultDestinationPattern, "Destination directory of artifact")
+
+	runFdroidUpdate  *bool   = flag.Bool("runFdroidUpdate", false, "if downloader should run \"fdroid update\" after download")
+	fdroidVirtualEnv *string = flag.String("fdroidVENV", "", "optionaly declare the virtualenv the downloader should use")
 
 	logLevel *string = flag.String("log", "WARN", "One of DEBUG,INFO,WARN,ERROR")
 )
@@ -63,6 +67,19 @@ func main() {
 	downloads, err := buildkiteHandler.Start()
 	if err != nil {
 		log.Warn(err)
+	}
+
+	if downloads > 0 && *runFdroidUpdate {
+		fh := fdroidHandler.NewFdroidHandler()
+		if len(*fdroidVirtualEnv) > 0 {
+			err = fh.SetFdroidVENV(*fdroidVirtualEnv)
+			if err != nil {
+				log.Error(err)
+			}
+		}
+		fh.RunFdroidCommand("update")
+		// TODO: Check if deploy is possible/configured
+		fh.RunFdroidCommand("deploy")
 	}
 
 	// use exit code to respond if there are artifacts downloaded
