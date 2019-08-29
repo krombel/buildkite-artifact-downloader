@@ -4,8 +4,8 @@ import (
 	"flag"
 	"os"
 
-	downloader "./downloader"
-	fdroidHandler "./fdroid-handler"
+	downloader "github.com/krombel/buildkite-artifact-downloader/downloader"
+	fdroidHandler "github.com/krombel/buildkite-artifact-downloader/fdroid-handler"
 	log "github.com/sirupsen/logrus"
 )
 

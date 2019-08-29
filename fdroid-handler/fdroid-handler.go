@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	common "github.com/krombel/buildkite-artifact-downloader/common"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -18,31 +19,15 @@ func NewFdroidHandler() *FdroidHandler {
 	}
 }
 
-func stringIsDirectory(name string) (bool, error) {
-	file, err := os.Open(name)
-	if err != nil {
-		return false, err
-	}
-	defer file.Close()
-	fi, err := file.Stat()
-	if err != nil {
-		return false, err
-	}
-	if fi.IsDir() {
-		return true, nil
-	}
-	return false, nil
-}
-
 func (fh *FdroidHandler) SetFdroidVENV(venv string) error {
 	log.WithFields(log.Fields{
 		"method": "SetFdroidVENV",
 		"param":  venv,
 	}).Info("Run")
-	if ret, err := stringIsDirectory(venv); !ret {
+	if ret, err := common.StringIsDirectory(venv); !ret {
 		return fmt.Errorf("VENV is no directory (%v)", err)
 	}
-	if ret, err := stringIsDirectory(venv + "/bin"); !ret {
+	if ret, err := common.StringIsDirectory(venv + "/bin"); !ret {
 		return fmt.Errorf("VENV/bin is no directory (%v)", err)
 	}
 	fh.virtualEnv = venv
