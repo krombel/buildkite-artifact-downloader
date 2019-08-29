@@ -2,9 +2,11 @@ package buildkiteArtifactDownloader
 
 import (
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -21,6 +23,7 @@ type BuildkiteHandler struct {
 	buildID           int
 	artifactFilter    *regexp.Regexp
 	destPattern       string
+	netClient         *http.Client
 }
 
 // NewBuildkiteHandler constructs a new buildkite downloader instance
@@ -31,6 +34,10 @@ func NewBuildkiteHandler(
 	return &BuildkiteHandler{
 		buildkiteOrg:      buildkiteOrg,
 		buildkitePipeline: buildkitePipeline,
+
+		netClient: &http.Client{
+			Timeout: time.Second * 10,
+		},
 	}
 }
 
@@ -106,6 +113,35 @@ func (bd *BuildkiteHandler) getDestinationPath(buildInfo BuildkiteBuildInfo, art
 	return output
 }
 
+// resolveArtifacts returns an array of artifacts (filtered by artifactFilter)
+func (bd *BuildkiteHandler) resolveArtifacts(job BuildkiteBuildJobInfo) ([]BuildkiteBuildArtifactInfo, error) {
+	if job.ArtifactCount <= 0 {
+		return nil, fmt.Errorf("Job contains no artifacts")
+	}
+	var err error
+
+	var artifactInfo []BuildkiteBuildArtifactInfo
+	artifactInfo, err = bd.getArtifactInfo(job.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []BuildkiteBuildArtifactInfo
+	for _, artifact := range artifactInfo {
+		if bd.artifactFilter != nil &&
+			!bd.artifactFilter.MatchString(artifact.Filename) {
+			log.WithFields(log.Fields{
+				"buildID":          bd.buildID,
+				"artifactFilename": artifact.Filename,
+			}).Info("Skip artifact because it does not match artifact filter")
+			continue
+		}
+		result = append(result, artifact)
+	}
+
+	return result, nil
+}
+
 // Start triggers a download of artifacts and returns
 // the count of artifact downloads
 func (bd *BuildkiteHandler) Start() (int, error) {
@@ -132,37 +168,47 @@ func (bd *BuildkiteHandler) Start() (int, error) {
 		return 0, fmt.Errorf("Build %d failed", bd.buildID)
 	}
 
-	var foundJob *BuildkiteBuildJobInfo
+	var artifacts []BuildkiteBuildArtifactInfo
 	for _, job := range buildInfo.Jobs {
 		if job.ArtifactCount <= 0 {
+			// dont throw an error; just ignore jobs without artifacts
+			log.WithFields(log.Fields{
+				"buildID": bd.buildID,
+				"jobID":   job.ID,
+			}).Debug("Job contains no artifacts")
 			continue
 		}
-		foundJob = &job
-		break
+		artifactsTmp, err := bd.resolveArtifacts(job)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"buildID": bd.buildID,
+				"jobID":   job.ID,
+			}).Info("resolving of artifacts failed")
+		}
+		if artifactsTmp == nil {
+			log.WithFields(log.Fields{
+				"buildID": bd.buildID,
+				"jobID":   job.ID,
+			}).Debug("No matching artifacts for job")
+			continue
+		}
+		artifacts = append(artifacts, artifactsTmp...)
 	}
-	if foundJob == nil {
+
+	if len(artifacts) == 0 {
 		log.WithFields(log.Fields{
 			"buildID": bd.buildID,
-		}).Warn("Cannot find job with artifacts")
-		return 0, fmt.Errorf("Cannot find job with artifacts")
+		}).Warn("Cannot find matching artifacts")
+		return 0, fmt.Errorf("Cannot find matching artifacts")
 	}
 
-	var artifactInfo []BuildkiteBuildArtifactInfo
-	artifactInfo, err = bd.getArtifactInfo(foundJob.ID)
-	if err != nil {
-		return 0, err
-	}
+	log.WithFields(log.Fields{
+		"buildID":   bd.buildID,
+		"artifacts": len(artifacts),
+	}).Debug("Found artifacts")
 
 	var downloadCount int
-	for _, artifact := range artifactInfo {
-		if bd.artifactFilter != nil &&
-			!bd.artifactFilter.MatchString(artifact.Filename) {
-			log.WithFields(log.Fields{
-				"buildID":          bd.buildID,
-				"artifactFilename": artifact.Filename,
-			}).Info("Skip artifact because it does not match artifact filter")
-			continue
-		}
+	for _, artifact := range artifacts {
 		outPath := bd.getDestinationPath(*buildInfo, artifact)
 		err := bd.downloadArtifact(artifact, outPath)
 		if err != nil {
