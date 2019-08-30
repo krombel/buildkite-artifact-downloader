@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -144,13 +145,23 @@ func (bd *BuildkiteHandler) downloadArtifact(artifact BuildkiteBuildArtifactInfo
 	// Write the body to file
 	_, err = io.Copy(tmpFile, resp.Body)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"buildID":          bd.buildID,
-			"artifactFilename": artifact.Filename,
-			"destination":      destPath,
-			"error":            err,
-		}).Warn("Download interrupted. Download not stored")
-		return fmt.Errorf("Cannot write to temp file %s ('%s')", tmpFile.Name(), err)
+		if e, ok := err.(net.Error); ok && e.Timeout() {
+			log.WithFields(log.Fields{
+				"buildID":          bd.buildID,
+				"artifactFilename": artifact.Filename,
+				"destination":      destPath,
+				"error":            e,
+			}).Warn("Download interrupted. Timeout occured")
+			// This was a timeout
+		} else {
+			log.WithFields(log.Fields{
+				"buildID":          bd.buildID,
+				"artifactFilename": artifact.Filename,
+				"destination":      destPath,
+				"error":            err,
+			}).Warn("Download interrupted. Download not stored")
+			return fmt.Errorf("Cannot write to temp file %s ('%s')", tmpFile.Name(), err)
+		}
 	}
 
 	// Close the file
