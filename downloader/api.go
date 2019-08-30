@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"regexp"
@@ -115,12 +116,17 @@ func (bd *BuildkiteHandler) downloadArtifact(artifact BuildkiteBuildArtifactInfo
 		return fmt.Errorf("Destination does already exist - do not download")
 	}
 
-	// Create the file
-	out, err := os.Create(destPath)
+	tmpFile, err := ioutil.TempFile(os.TempDir(), "buildkite-artifact-")
 	if err != nil {
-		return fmt.Errorf("Cannot create %s ('%s')", destPath, err)
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"destination":      destPath,
+			"error":            err,
+		}).Fatal("Cannot create temporary file")
 	}
-	defer out.Close()
+	// Remember to clean up the file afterwards
+	defer os.Remove(tmpFile.Name())
 
 	log.WithFields(log.Fields{
 		"buildID":          bd.buildID,
@@ -136,8 +142,45 @@ func (bd *BuildkiteHandler) downloadArtifact(artifact BuildkiteBuildArtifactInfo
 	defer resp.Body.Close()
 
 	// Write the body to file
-	_, err = io.Copy(out, resp.Body)
+	_, err = io.Copy(tmpFile, resp.Body)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"destination":      destPath,
+			"error":            err,
+		}).Warn("Download interrupted. Download not stored")
+		return fmt.Errorf("Cannot write to temp file %s ('%s')", tmpFile.Name(), err)
+	}
+
+	// Close the file
+	if err := tmpFile.Close(); err != nil {
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"tmpFile":          tmpFile.Name(),
+			"error":            err,
+		}).Fatal("Cannot close tmpfile")
+	}
+
+	data, err := ioutil.ReadFile(tmpFile.Name())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"tmpFile":          tmpFile.Name(),
+			"error":            err,
+		}).Warn("Cannot read tmpfile")
+		return fmt.Errorf("Cannot read tmpfile %s ('%s')", tmpFile.Name(), err)
+	}
+	err = ioutil.WriteFile(destPath, data, 0644)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"destination":      destPath,
+			"error":            err,
+		}).Warn("Cannot write to destination")
 		return fmt.Errorf("Cannot write to %s ('%s')", destPath, err)
 	}
 
