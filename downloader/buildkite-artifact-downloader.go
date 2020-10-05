@@ -210,8 +210,7 @@ func (bd *BuildkiteHandler) Start() (int, error) {
 	var downloadCount int
 	for _, artifact := range artifacts {
 		outPath := bd.getDestinationPath(*buildInfo, artifact)
-		err := bd.downloadArtifact(artifact, outPath)
-		if err != nil {
+		if err := bd.downloadArtifact(artifact, outPath); err != nil {
 			log.Warn(err)
 		} else {
 			// there is no error so we assume, that the download succeeded

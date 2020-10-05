@@ -1,4 +1,16 @@
+github.com/avast/apkparser v0.0.0-20190516101250-3b8c5efcb6a9/go.mod h1:c0733VBXm1we9M1zCtoOspplSwOYebS3hpDkJyMORRU=
+github.com/avast/apkparser v0.0.0-20200102113521-69bcdd9c2403/go.mod h1:eZzHNfZWA1eeKPQE3LVmfRw32lhrH351jDCsma9qxOc=
+github.com/avast/apkparser v0.0.0-20200402131724-9fd46d5c4749/go.mod h1:CSBdDZNEsGRYPiDt9QcGrIy8iWQ9YzB1rcuxn44+0jc=
+github.com/avast/apkparser v0.0.0-20200924103028-30471fa5618f h1:gMaKlNhrxwr2PqaSptI1XWyXOwr3R3aDbOpbXejGWjg=
+github.com/avast/apkparser v0.0.0-20200924103028-30471fa5618f/go.mod h1:SKNzWGFyNJji/Z+iXjPCpmpFPvenFuhLjrSLCwCM/cM=
+github.com/avast/apkverifier v0.0.0-20190808142831-dbbe53a24744/go.mod h1:mhWRoMg0KhvWt8SX7B2v2E3VfWt5jWfHfD9PtWAN+qM=
+github.com/avast/apkverifier v0.0.0-20200217135742-aa28c80b82ae/go.mod h1:SV58cyAAN+SzX8GIBhizatMJNGcDyfQUj/xZUlKRW+I=
+github.com/avast/apkverifier v0.0.0-20200416105355-97c5338f32f0/go.mod h1:HskRSJJJbP3poUkDRAyRAdDVSsh5J1mz8cRc2/B4kbc=
+github.com/avast/apkverifier v0.0.0-20200924121739-e6e2d5946aaf h1:SH8tYiAqg3FPeCMc1M6fKiBNwA8SwhGDq1zwOy9CgCg=
+github.com/avast/apkverifier v0.0.0-20200924121739-e6e2d5946aaf/go.mod h1:uhY/I/3Vh3V6ZFgLm/EFX/j5//MdoXpvcULTtzRW3YA=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/klauspost/compress v1.11.0 h1:wJbzvpYMVGG9iTI9VxpnNZfd4DzMPoCWze3GgSqz8yg=
+github.com/klauspost/compress v1.11.0/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/sirupsen/logrus v1.4.2 h1:SPIRibHv4MatM3XXNO2BJeFLZwZ2LvZgfQ5+UNI2im4=

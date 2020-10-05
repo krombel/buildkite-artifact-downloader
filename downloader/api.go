@@ -10,7 +10,9 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 
+	"github.com/avast/apkverifier"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -172,6 +174,24 @@ func (bd *BuildkiteHandler) downloadArtifact(artifact BuildkiteBuildArtifactInfo
 			"tmpFile":          tmpFile.Name(),
 			"error":            err,
 		}).Fatal("Cannot close tmpfile")
+	}
+
+	if strings.HasSuffix(destPath, ".apk") {
+		log.WithFields(log.Fields{
+			"buildID":          bd.buildID,
+			"artifactFilename": artifact.Filename,
+			"tmpFile":          tmpFile.Name(),
+		}).Info("Validate APK")
+		_, err := apkverifier.Verify(tmpFile.Name(), nil)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"buildID":          bd.buildID,
+				"artifactFilename": artifact.Filename,
+				"tmpFile":          tmpFile.Name(),
+				"error":            err,
+			}).Warn("Verification of APK failed: %s", err.Error())
+			return fmt.Errorf("Verification of APK failed: %s", err.Error())
+		}
 	}
 
 	data, err := ioutil.ReadFile(tmpFile.Name())
