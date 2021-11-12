@@ -17,10 +17,9 @@ import (
 )
 
 type BuildkiteBuildJobInfo struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	ArtifactCount int    `json:"artifact_count"`
-	State         string `json:"state"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	State string `json:"state"`
 }
 type BuildkiteBuildInfo struct {
 	State    string `json:"state"`

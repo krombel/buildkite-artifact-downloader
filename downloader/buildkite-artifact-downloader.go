@@ -115,9 +115,6 @@ func (bd *BuildkiteHandler) getDestinationPath(buildInfo BuildkiteBuildInfo, art
 
 // resolveArtifacts returns an array of artifacts (filtered by artifactFilter)
 func (bd *BuildkiteHandler) resolveArtifacts(job BuildkiteBuildJobInfo) ([]BuildkiteBuildArtifactInfo, error) {
-	if job.ArtifactCount <= 0 {
-		return nil, fmt.Errorf("Job contains no artifacts")
-	}
 	var err error
 
 	var artifactInfo []BuildkiteBuildArtifactInfo
@@ -170,14 +167,6 @@ func (bd *BuildkiteHandler) Start() (int, error) {
 
 	var artifacts []BuildkiteBuildArtifactInfo
 	for _, job := range buildInfo.Jobs {
-		if job.ArtifactCount <= 0 {
-			// dont throw an error; just ignore jobs without artifacts
-			log.WithFields(log.Fields{
-				"buildID": bd.buildID,
-				"jobID":   job.ID,
-			}).Debug("Job contains no artifacts")
-			continue
-		}
 		artifactsTmp, err := bd.resolveArtifacts(job)
 		if err != nil {
 			log.WithFields(log.Fields{
